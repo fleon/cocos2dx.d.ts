@@ -11,9 +11,9 @@ http://lab.fleon.org/cocos2dx.d.ts/dist/cocos2dx.d.ts
 2. Open browser console and enter the following code:
 
 ```js
-var jq=document.createElement('script');
-jq.src="http://lab.fleon.org/cocos2dx.d.ts/src/generator.js";
-document.getElementsByTagName('body')[0].appendChild(jq);
+var j=document.createElement('script');
+j.src="http://lab.fleon.org/cocos2dx.d.ts/src/generator.js";
+document.getElementsByTagName('body')[0].appendChild(j);
 ```
 
 3. Wait until generation progress completes. When the progress reaches 100%, the definition file will appear on the screen.
