@@ -14,7 +14,6 @@ http://lab.fleon.org/cocos2dx.d.ts/dist/cocos2dx.d.ts
 javascript:var jq=document.createElement('script');jq.src="http://lab.fleon.org/cocos2dx.d.ts/src/generator.js";document.getElementsByTagName('body')[0].appendChild(jq);
 ```
 
-3. Click the bookmarklet saved in Step 1.
-4. Wait until generation progress completes. When the progress reaches 100%, the definition file will appear on the screen.
-5. Definition files for Spine runtime can be found [here](https://github.com/EsotericSoftware/spine-runtimes/blob/3.6/spine-ts/build/spine-core.d.ts).
+3. Wait until generation progress completes. When the progress reaches 100%, the definition file will appear on the screen.
+4. Definition files for Spine runtime can be found [here](https://github.com/EsotericSoftware/spine-runtimes/blob/3.6/spine-ts/build/spine-core.d.ts).
 
