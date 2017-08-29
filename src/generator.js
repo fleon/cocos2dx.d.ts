@@ -4,16 +4,18 @@ document.getElementsByTagName('body')[0].appendChild(jq);
 var modules = {};
 let dts = ''
 
+var declareAsClass = [
+  'cc.kmMat4', 'cc.CanvasContextWrapper', 'cc.ScrollViewDelegate',
+  'cc.IMEKeyboardNotificationInfo', 'ccs.Shape', 'cc.ColliderFilter', 'ccs.DisplayManager',
+  'ccs.TweenType', 'ccs.DataInfo', 'ccs.TInfo', 'cc.DirectorDelegate',
+  'cc.TableViewDelegate', 'cc.TableViewDataSource', 'cc.IMEKeyboardNotificationInfo'
+]
+
 function undeclared() {
-  return '\n' + [
-    'cc.TableViewDataSource', 'cc.TableViewDelegate', 'cc.BlendFunc', 'cc.kmMat4',
-    'cc.CanvasContextWrapper', 'ccs.Shape', 'ccs.DisplayManager', 'ccs.TweenType',
-    'ccs.DataInfo', 'cc.DirectorDelegate', 'cc.ColliderFilter', 'cc.IMEKeyboardNotificationInfo',
-    'cc.ScrollViewDelegate', 'cc.ActionFrame', 'ccs.TInfo'
-  ].map(c => {
+  return '\n' + declareAsClass.map(c => {
     c = c.split('.')
-    return `declare namespace ${c[0]} { interface ${c[1]} { } }`
-  }).join('\n\n')
+    return `declare namespace ${c[0]} { class ${c[1]} { } }`
+  }).join('\n')
 }
 
 String.prototype.trim = function () {
@@ -21,6 +23,23 @@ String.prototype.trim = function () {
 }
 
 function type(t) {
+  if (t === 'ccui.Widget.LOCAL_TEXTURE|ccui.Widget.PLIST_TEXTURE' ||
+    t === 'ccui.LoadingBar.TYPE_LEFT | ccui.LoadingBar.TYPE_RIGHT' ||
+    t === 'ccui.ScrollView.DIR_NONE | ccui.ScrollView.DIR_VERTICAL | ccui.ScrollView.DIR_HORIZONTAL | ccui.ScrollView.DIR_BOTH' ||
+    t === 'ccui.ListView.MAGNETIC_NONE|ccui.ListView.MAGNETIC_CENTER|ccui.ListView.MAGNETIC_BOTH_END|ccui.ListView.MAGNETIC_LEFT|ccui.ListView.MAGNETIC_RIGHT|ccui.ListView.MAGNETIC_TOP|ccui.ListView.MAGNETIC_BOTTOM' ||
+    t === 'ccui.Layout.ABSOLUTE|ccui.Layout.LINEAR_VERTICAL|ccui.Layout.LINEAR_HORIZONTAL|ccui.Layout.RELATIVE' ||
+    t === 'ccui.Layout.CLIPPING_STENCIL|ccui.Layout.CLIPPING_SCISSOR' ||
+    t === 'ccui.Layout.BG_COLOR_NONE|ccui.Layout.BG_COLOR_SOLID|ccui.Layout.BG_COLOR_GRADIENT' ||
+    t === 'ccui.LayoutParameter.NONE|ccui.LayoutParameter.LINEAR|ccui.LayoutParameter.RELATIVE' ||
+    t === 'ccui.Widget.TYPE_WIDGET|ccui.Widget.TYPE_CONTAINER' ||
+    t === 'ccui.Widget.LOCAL_TEXTURE | ccui.Widget.PLIST_TEXTURE' ||
+    t === 'ccui.ListView.GRAVITY_LEFT|ccui.ListView.GRAVITY_RIGHT|ccui.ListView.GRAVITY_CENTER_HORIZONTAL|ccui.ListView.GRAVITY_BOTTOM|ccui.ListView.GRAVITY_CENTER_VERTICAL' ||
+    t === 'cc.ProgressTimer.TYPE_RADIAL|cc.ProgressTimer.TYPE_BAR' ||
+    t === 'ccui.Widget.SIZE_ABSOLUTE|ccui.Widget.SIZE_PERCENT' ||
+    t === 'ccui.linearVerticalLayoutManager|ccui.linearHorizontalLayoutManager|ccui.relativeLayoutManager|null') {
+    return 'any'
+  }
+  let s = t.split('.')
   t = t.trim()
   if (t.indexOf('|') >= 0) {
     return t.split('|').map(type).join(' | ')
@@ -60,8 +79,14 @@ function type(t) {
     case 'Scale9Sprite'.toLowerCase():
     case 'cc.Scale9Sprite'.toLowerCase():
       return 'ccui.Scale9Sprite'
+    case 'cc.ActionFrame'.toLowerCase():
+      return 'ccs.ActionFrame'
     case 'cc.rect':
       return 'cc.Rect'
+    case 'cc.blendfunc':
+      return 'Function'
+    case 'cc.saxparser':
+      return 'cc.saxParser'
     case 'spine.atlas':
       return 'spine.TextureAtlas'
     case 'cc.AssetsManager'.toLowerCase():
@@ -86,10 +111,10 @@ function type(t) {
     case 'VERTICAL_TEXT_ALIGNMENT_BOTTOM'.toLowerCase():
       return 'cc.VERTICAL_TEXT_ALIGNMENT_BOTTOM'
 
-    case 'cc.TableViewDataSource'.toLowerCase():
-    case 'cc.TableViewDelegate'.toLowerCase():
     case 'image':
       return 'object'
+    case 'cc.view':
+      return 'any'
     default:
       // unavailable
       if ([
@@ -114,30 +139,81 @@ function paramsToDts(params) {
   }).join(', ')
 }
 
-function fieldsToDts(fields, joiner, isModule = false) {
+function fieldsToDts(fields, joiner, isModule = false, isStatic = false, isConstant = false) {
   return fields.map(f => {
+    let t = type(f.type)
+    if (f.name === 'create') {
+      f.name = 'create()'
+      return ''
+    }
+
+    let k = declareAsClass.map(d => d.split('.')[1]).indexOf(f.name)
+    if (k >= 0) {
+      declareAsClass.splice(k, 1)
+      return comment(f.comment, joiner) + joiner + 'class ' + f.name + ' { }'
+    }
+
     let isConstant = f.extras.indexOf('constant') >= 0
     let declarator = isConstant ? 'const ' : 'let '
-    return comment(f.comment, joiner) + joiner + (isModule ? declarator : '') + f.name + ': ' + type(f.type)
+    let s = comment(f.comment, joiner) + joiner + (isModule ? declarator : '') + (isStatic ? 'static ' : '') + f.name + ': ' + t
+    if (isConstant && isModule) {
+      s += joiner + 'type ' + f.name + ' = ' + t
+    }
+    return s
   }).join(joiner)
 }
 
-function methodsToDts(methods, joiner, isModule = false) {
+function isOverridden(method, _super) {
+  if (!_super) return false
+  return _super.methods.map(m => m.name).indexOf(method.name) >= 0 ||
+    _super.interface.methods.map(m => m.name).indexOf(method.name) >= 0 ||
+    _super.fields.map(m => m.name).indexOf(method.name) >= 0 ||
+    _super.interface.fields.map(m => m.name).indexOf(method.name) >= 0 ||
+    isOverridden(method, modules[_super.interface && _super.interface.extends])
+}
+
+function methodsToDts(methods, joiner, isModule = false, isStatic = false, _super = '') {
   return methods.map(m => {
-    return comment(m.comment, joiner, m) + joiner + (isModule ? 'function ' : '') + m.name + '(' + paramsToDts(m.params) + '): ' + type(m.returns.type)
-  }).join(joiner)
+    let t = type(m.returns.type)
+
+    if (isOverridden(m, _super)) {
+      return ''
+    }
+
+    var idx = declareAsClass.map(d => d.split('.')[1]).indexOf(m.name)
+    if (idx >= 0) {
+      declareAsClass.splice(idx, 1)
+      return comment(m.comment, joiner) + joiner + 'class ' + m.name + ' { constructor(' + paramsToDts(m.params) + ') }'
+    }
+
+    return comment(m.comment, joiner, m) + joiner +
+      (isModule ? 'function ' : '') + (isStatic ? 'static ' : '') + m.name +
+      '(' + paramsToDts(m.params) + '): ' + t
+  }).filter(m => m).join(joiner)
 }
 
-function enumToDts(fields, joiner, isModule = false) {
-  return fields.map(f => {
-    return comment(f.comment, joiner) + joiner + 'enum ' + f.name + ' { }'
-  }).join(joiner)
+function initsToDts(methods, joiner, isStatic = false, _super = '', comments = true, set = new Set()) {
+  let c = comment
+  if (!comments) {
+    //comment = () => ''
+  }
+
+  let a = methods.map(m => {
+    let t = type(m.returns.type)
+    if (isOverridden(m, _super)) {
+      set.add(m.name)
+      return comment(m.comment, joiner, m) + joiner + (isStatic ? 'static ' : '') + m.name + '(' + paramsToDts(m.params) + '): ' + t
+    }
+  }).filter(m => m).join(joiner)
+
+  comment = c
+  return a
 }
 
 function comment(c, joiner, method) {
   if (!comment) return ''
   if (method && method.params.length) {
-    c += '\n\n' + method.params.map(p => `@param {${p.type}} ${p.name} ${p.comment}`).join('\n')
+    c += '\n\n' + method.params.map(p => `@param {${p.type || "any"}} ${p.name} ${p.comment}`).join('\n')
   }
   if (method && method.returns && method.returns.type) {
     c += `\n\n@returns ${method.returns.comment}`
@@ -147,35 +223,76 @@ function comment(c, joiner, method) {
   }).join('') + joiner + ' */'
 }
 
+function superMethods(s, joiner, set = new Set()) {
+  if (!s) return ''
+  let methods = s.interface.methods.filter(m => {
+    return true
+  })
+  let fields = s.interface.fields.filter(f => {
+    let v = !set.has(f.name)
+    set.add(f.name)
+    return v
+  })
+  if (s && s.interface) {
+    let c = comment
+    //comment = () => ''
+    let a = `
+${fieldsToDts(fields, joiner)}
+${methodsToDts(methods, joiner, false, false, modules[s.interface.extends])}
+${superMethods(modules[s.interface.extends], joiner, set)}
+`
+    comment = c
+    return a
+  }
+  return ''
+}
+
 function moduleToDts(module) {
   let data = ''
   if (module.type === 'class') {
+    let ex;
+    if (module.interface.extends) {
+      ex = module.interface.extends
+      ex = ex.split('.')
+      ex[1] = 'I' + ex[1]
+      ex = ex.join('.')
+    }
+    let set = new Set()
+    // todo: doesn't probably have all items now
+    // add only overridden elements separately
+    let _super = modules[module.interface.extends]
     data += `
 declare namespace ${module.namespace} {
-  interface ${module.name} ${module.extends ? 'extends ' + module.extends : ''} {
+  interface I${module.name} ${ex ? 'extends ' + ex : ''} {
+    ${fieldsToDts(module.interface.fields, '\n    ')}
+    ${methodsToDts(module.interface.methods, '\n    ', false, false, _super)}
+  }
+
+  interface I${module.name}Overrides {
+    ${initsToDts(module.interface.methods, '\n    ', false, _super)}
+  }
+
+  class ${module.name} implements I${module.name}, I${module.name}Overrides {
     ${comment(module.interface.constructor.comment, '\n    ', module.interface.constructor)}
     constructor(${paramsToDts(module.interface.constructor.params)})
-    ${fieldsToDts(module.interface.fields, '\n    ')}
-    ${methodsToDts(module.interface.methods, '\n    ')}
+
+    ${fieldsToDts(module.fields, '\n    ', false, true)}
+    ${fieldsToDts(module.enum.fields, '\n    ', false, true)}
+    ${methodsToDts(module.methods, '\n    ', false, true)}
+
+    ${initsToDts(module.interface.methods, '\n    ', false, _super, false, set)}
+    ${superMethods(module, '\n    ', set) }
   }
 }
 `
-    if (module.fields.length || module.enum.fields.length || module.methods.length) {
-      data += `
-declare namespace ${module.namespace} {
-  namespace ${module.name} {
-    ${fieldsToDts(module.fields, '\n    ', true)}
-    ${enumToDts(module.enum.fields, '\n    ', true)}
-    ${methodsToDts(module.methods, '\n    ', true)}
-  }
-}
-`
-    }
+
+
+
   } else {
     data += `
 declare namespace ${module.namespace ? module.namespace + '.' + module.name : module.name} {
   ${fieldsToDts(module.fields, '\n  ', true)}
-  ${enumToDts(module.enum.fields, '\n  ', true)}
+  ${fieldsToDts(module.enum.fields, '\n  ', true, false, true)}
   ${methodsToDts(module.methods, '\n  ', true)}
 }
 `
@@ -190,6 +307,9 @@ setTimeout(function () {
     var intf = {
       extends: $('ul.summary:contains("Extends") .fixedFont', body).text().trim()
     }
+    if (intf.extends.toLowerCase() === 'cc.saxparser') {
+      intf.extends = 'cc.saxParser'
+    }
     module.interface = intf;
     module.enum = {}
     module.name = $('.classTitle span', body).text().trim();
@@ -199,8 +319,11 @@ setTimeout(function () {
       return // ignore loader module
     }
     module.namespace = name.join('.')
-
     module.type = $('.classTitle', body).html().replace(/<span.*<\/span>/, '').trim().toLowerCase();
+
+    if (module.name.charAt(0).toLowerCase() === module.name.charAt() && !/saxParser/.test(module.name)) {
+      module.type = 'namespace'
+    }
 
     var classDetail = $('h2:contains(\'Class Detail\')', body).parent();
     intf.constructor = {
@@ -232,7 +355,7 @@ setTimeout(function () {
       if ((field.extras.indexOf('static') >= 0 && field.extras.indexOf('constant') >= 0) ||
         field.name === field.name.toUpperCase()) {
         module.enum.fields.push(field)
-      } else if (field.extras.indexOf('static') >= 0) {
+      } else if (module.type === 'namespace' || field.extras.indexOf('static') >= 0) {
         module.fields.push(field)
       } else {
         intf.fields.push(field)
@@ -263,18 +386,18 @@ setTimeout(function () {
         }
       }
       if (method.name === 'ctor') {
-        intf.constructor = method
+        intf.constructor = method //todo: this doesn't seem right
         return
       }
 
-      if (method.extras.indexOf('static') >= 0) {
+      if (module.type === 'namespace' || method.extras.indexOf('static') >= 0) {
         module.methods.push(method)
       } else {
         intf.methods.push(method)
       }
     });
 
-    modules[module.name] = module
+    modules[module.namespace + '.' + module.name] = module
     dts += moduleToDts(module)
   }
 

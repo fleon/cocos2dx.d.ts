@@ -1,0 +1,22 @@
+{
+  "name": "cocos2dx.d.ts",
+  "version": "1.0.0",
+  "description": "Typescript definition files for cocos2dx generated from JSDoc.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fleon/cocos2dx.d.ts.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/fleon/cocos2dx.d.ts/issues"
+  },
+  "homepage": "https://github.com/fleon/cocos2dx.d.ts#readme",
+  "devDependencies": {
+    "typescript": "^2.2.2"
+  }
+}
