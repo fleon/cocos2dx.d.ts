@@ -8,7 +8,7 @@ var declareAsClass = [
   'cc.kmMat4', 'cc.CanvasContextWrapper', 'cc.ScrollViewDelegate',
   'cc.IMEKeyboardNotificationInfo', 'ccs.Shape', 'cc.ColliderFilter', 'ccs.DisplayManager',
   'ccs.TweenType', 'ccs.DataInfo', 'ccs.TInfo', 'cc.DirectorDelegate',
-  'cc.TableViewDelegate', 'cc.TableViewDataSource', 'cc.IMEKeyboardNotificationInfo'
+  'cc.TableViewDelegate', 'cc.TableViewDataSource'
 ]
 
 function undeclared() {
@@ -261,6 +261,8 @@ function moduleToDts(module) {
     // todo: doesn't probably have all items now
     // add only overridden elements separately
     let _super = modules[module.interface.extends]
+    let c = comment
+    comment = () => ''
     data += `
 declare namespace ${module.namespace} {
   interface I${module.name} ${ex ? 'extends ' + ex : ''} {
@@ -271,6 +273,10 @@ declare namespace ${module.namespace} {
   interface I${module.name}Overrides {
     ${initsToDts(module.interface.methods, '\n    ', false, _super)}
   }
+
+`
+    comment = c
+    data += `
 
   class ${module.name} implements I${module.name}, I${module.name}Overrides {
     ${comment(module.interface.constructor.comment, '\n    ', module.interface.constructor)}
@@ -285,8 +291,6 @@ declare namespace ${module.namespace} {
   }
 }
 `
-
-
 
   } else {
     data += `
